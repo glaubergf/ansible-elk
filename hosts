@@ -1,0 +1,7 @@
+[webservers]
+vg-kvm-elk ansible_host="{{ public_ip }}"
+
+[webservers:vars]
+ansible_user = "{{ ansible_user }}" 
+ansible_password = "{{ ansible_password }}"
+ansible_become_password = "{{ ansible_become_password }}"

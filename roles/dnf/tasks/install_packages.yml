@@ -1,0 +1,53 @@
+---
+- name: Limpando todos os repositórios do sistema
+  ansible.builtin.shell:
+    cmd: dnf --enablerepo=* clean all
+  tags: dnf
+
+- name: Atualizando todos os pacotes do sistema. Aguarde ... 
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
+  tags: dnf
+
+- name: Atualizando cache dos repositórios do sistema
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
+    update_cache: yes
+  tags: dnf
+
+- name: Instalando repositório "epel", mais os pacotes "bind-utils" e "net-tools"
+  ansible.builtin.dnf:
+    name:
+      - epel-release
+      - bind-utils
+      - net-tools
+    state: latest
+  tags: dnf
+
+- name: Instalando alguns pacotes específicos
+  ansible.builtin.dnf:
+    name:
+      - bash-completion
+      - firewalld
+      - nano
+      - wget
+      - nginx
+      - htop
+    state: latest
+  tags: dnf
+
+- name: Atualizando cache dos repositórios do sistema
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
+    update_cache: yes
+  tags: dnf
+
+- name: Habilitando e reiniciando o serviço Nginx
+  ansible.builtin.service:
+    name: nginx
+    enabled: yes
+    state: restarted
+  tags: dnf

@@ -1,0 +1,19 @@
+---
+#--- group variables file main [webservers / webservers:vars]
+#--- server rockylinux (elk)
+public_ip : 192.100.20.200
+ansible_user : elk
+ansible_password : elk123
+ansible_become_password : elk123
+
+# --- client Debian
+#public_ip : 192.100.10.150
+#ansible_user : mcnd2
+#ansible_password : mcnd2
+#ansible_become_password : mcnd2
+
+# --- client opensuse
+#public_ip : 192.100.10.206
+#ansible_user : mcnd2
+#ansible_password : mcnd2
+#ansible_become_password : mcnd2

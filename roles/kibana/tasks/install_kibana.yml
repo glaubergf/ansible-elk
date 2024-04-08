@@ -1,0 +1,86 @@
+---
+### Instalar o Kibana.
+### https://www.elastic.co/guide/en/kibana/8.9/rpm.html
+
+- name: Instalando o pacote Kibana
+  ansible.builtin.dnf:
+    name: kibana
+    state: present
+  tags: kibana
+
+- name: Configurando a ligação de porta do Kibana para usar um IP específico
+  ansible.builtin.lineinfile:
+    path: /etc/kibana/kibana.yml
+    regexp: '^#server.host: "localhost"'
+    line: 'server.host: "192.100.20.200"'
+    state: present
+  tags: kibana
+
+- name: Ativando e iniciando o serviço Kibana
+  ansible.builtin.systemd:
+    name: kibana
+    enabled: yes
+    state: started
+  tags: kibana
+
+- name: Criando com o "openssl" o usuário "kibanaadmin", gerando senha e armazenando no arquivo "/etc/nginx/htpasswd.users"
+  ansible.builtin.shell: 
+    cmd: echo "kibanaadmin:$(openssl passwd -apr1 'kibana123')" | sudo tee -a /etc/nginx/htpasswd.users
+  register: htpasswd_output
+  tags: kibana
+
+- name: Salvando a saída do "openssl" no arquivo "passwd_kibana.txt"
+  ansible.builtin.copy:
+    content: "{{ htpasswd_output.stdout }}"
+    dest: "/home/elk/passwd_kibana.txt"
+  tags: kibana
+
+- name: Permitindo tráfego na porta "TCP 5601"
+  ansible.posix.firewalld:
+    port: 5601/tcp
+    permanent: true
+    state: enabled
+    immediate: true
+  tags: kibana
+
+- name: Criando o arquivo de bloco "/etc/nginx/conf.d/elk.conf" do servidor Nginx
+  ansible.builtin.copy:
+    dest: /etc/nginx/conf.d/elk.conf
+    content: |
+      server {
+          listen 80;
+
+          server_name elk;
+
+          auth_basic "Restricted Access";
+          auth_basic_user_file /etc/nginx/htpasswd.users;
+
+          location / {
+              proxy_pass http://0.0.0.0:5601;
+              proxy_http_version 1.1;
+              proxy_set_header Upgrade $http_upgrade;
+              proxy_set_header Connection 'upgrade';
+              proxy_set_header Host $host;
+              proxy_cache_bypass $http_upgrade;
+          }
+      }
+    owner: root
+    group: root
+    mode: '0644'
+  tags: kibana
+
+- name: Verificando a configuração do Nginx e salvando no arquivo "output_config_nginx.txt"
+# O Nginx escreve a saída de erro (stderr) para o arquivo, e não a saída padrão (stdout).
+# Usar o operador de redirecionamento '2>' em vez de '>'.
+  ansible.builtin.shell:
+    cmd: sudo nginx -t 2> /home/elk/output_config_nginx.txt
+  register: nginx_check
+  changed_when: nginx_check.rc != 0
+  tags: kibana
+
+- name: Reiniciando o serviço Nginx
+  ansible.builtin.service:
+    name: nginx
+    state: restarted
+  when: nginx_check.changed
+  tags: kibana

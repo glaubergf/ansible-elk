@@ -1,0 +1,5 @@
+---
+- name: Configurando MOTD por um script
+  ansible.builtin.shell:
+    cmd: sh /home/elk/config_motd.sh
+  tags: motd

@@ -1,0 +1,128 @@
+---
+### Instalar o Beats (FILEBEAT/METRICBEAT/...) no cliente Debian.
+### https://www.elastic.co/guide/en/beats/libbeat/current/beats-reference.html
+
+### --- Copiar o certificado SSL do servidor Rocky Linux 9 para o cliente 
+# Debian 12 usando o comando scp.
+- name: Copiando o "Certificado Autoassinado do servidor ELK", do host local do projeto para o cliente remoto
+  ansible.builtin.copy:
+    src: /home/mcnd2/Projetos/ansible-elk/certs/vg-kvm-elk/etc/pki/tls/certs/logstash-forwarder.crt
+    dest: /etc/ssl/certs/logstash-forwarder.crt
+    owner: root
+    group: root
+    mode: 0600
+  tags: metricbeat
+
+- name: Baixando a "Chave de Assinatura" do ElasticSearch
+  ansible.builtin.get_url:
+    url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+    dest: /usr/share/keyrings/elasticsearch.gpg
+    mode: '0644'
+  tags: metricbeat
+
+- name: Adicionando o repositório ElasticSearch
+  ansible.builtin.apt_repository:
+    repo: 'deb [arch=amd64 signed-by=/usr/share/keyrings/elasticsearch.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main'
+    state: present
+  tags: metricbeat
+
+- name: Renomeando o arquivo de repositório para "/etc/apt/sources.list.d/elasticsearch.list"
+  ansible.builtin.shell:
+    cmd: mv /etc/apt/sources.list.d/artifacts_elastic_co_packages_8_x_apt.list /etc/apt/sources.list.d/elasticsearch.list
+  tags: metricbeat
+
+- name: Instalando o pacote "apt-transport-https" caso não esteja instalado
+  ansible.builtin.apt:
+    name: apt-transport-https
+    state: present
+    update_cache: yes
+  tags: metricbeat
+
+- name: Atualizando repositórios do sistema
+  apt:
+    update_cache: yes
+  tags: metricbeat
+
+- name: Instalando o pacote Metricbeat
+  apt:
+    name: metricbeat
+    state: present
+  tags: metricbeat
+
+- name: Habilitando o Metricbeat para iniciar junto com o sistema
+  systemd:
+    name: metricbeat
+    enabled: yes
+  tags: metricbeat
+
+- name: Iniciando o serviço Metricbeat
+  systemd:
+    name: metricbeat
+    state: started
+  tags: metricbeat
+
+- name: Alterando o "host" do Elasticsearch na seção "output.elasticsearch" em "/etc/metricbeat/metricbeat.yml"
+  ansible.builtin.replace:
+    path: /etc/metricbeat/metricbeat.yml
+    regexp: 'hosts: \["localhost:9200"\]'
+    replace: 'hosts: ["192.168.121.200:9200"]'
+    backup: yes
+  tags: metricbeat
+
+- name: Descomentando a linha "username" do Elasticsearch na seção "output.elasticsearch" em "/etc/metricbeat/metricbeat.yml"
+  ansible.builtin.replace:
+    path: /etc/metricbeat/metricbeat.yml
+    regexp: '#username: "elastic"'
+    replace: 'username: "elastic"'
+  tags: metricbeat
+
+- name: Descomentando a linha "password" do Elasticsearch na seção "output.elasticsearch" em "/etc/metricbeat/metricbeat.yml"
+  ansible.builtin.replace:
+    path: /etc/metricbeat/metricbeat.yml
+    regexp: '#password: "changeme"'
+    replace: 'password: "changeme"'
+  tags: metricbeat
+
+- name: Descomentando e alterando o valor de "host" na seção "setup.kibana" em "/etc/metricbeat/metricbeat.yml"
+  ansible.builtin.replace:
+    path: /etc/metricbeat/metricbeat.yml
+    regexp: '#host: "localhost:5601"'
+    replace: 'host: "192.168.121.10:5601"'
+  tags: metricbeat
+
+- name: Copiando o arquivo "passwd_elastic.txt" do host local do projeto para o cliente remoto
+  ansible.builtin.copy:
+    src: /home/mcnd2/Projetos/ansible-elk/files/passwd_elastic.txt
+    dest: /home/mcnd2/
+    owner: mcnd2
+    group: mcnd2
+    mode: 0600
+  tags: metricbeat
+
+- name: Extraindo a senha do arquivo "passwd_elastic.txt"
+  shell: grep "New value:" passwd_elastic.txt | awk '{print $3}'
+  register: passwd_elastic
+  changed_when: false
+  tags: metricbeat
+
+- name: Setando a senha na linha "password" do Elasticsearch na seção "output.elasticsearch" em "/etc/metricbeat/metricbeat.yml"
+  ansible.builtin.replace:
+    path: /etc/metricbeat/metricbeat.yml
+    regexp: 'password: "changeme"'
+    replace: 'password: "{{ passwd_elastic.stdout }}"'
+  tags: metricbeat
+
+- name: Habilitando o módulo "system" do Metricbeat.
+  shell: sudo metricbeat modules enable system
+  tags: metricbeat
+
+- name: Carregando painéis do Kibana (se necessário). Aguarde ...  
+  shell: sudo metricbeat setup
+  ignore_errors: true
+  tags: metricbeat
+
+- name: Reiniciando o serviço Metricbeat
+  systemd:
+    name: metricbeat
+    state: restarted
+  tags: metricbeat

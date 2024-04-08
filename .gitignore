@@ -1,0 +1,10 @@
+## CONFIG .gitignore
+
+# Diretórios local
+certs*
+files*
+notes*
+
+#actions-runner*
+
+# Arquivos local

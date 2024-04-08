@@ -1,0 +1,12 @@
+---
+- hosts: webservers
+  become: yes
+  #become_user: admin
+  
+  roles:
+  - { role: motd, tags: motd }
+  - { role: dnf, tags: dnf }
+  - { role: elasticsearch, tags: elastic }
+  - { role: kibana, tags: kibana }
+  - { role: logstash, tags: logstash }
+  #- { role: metricbeat, tags: metricbeat }

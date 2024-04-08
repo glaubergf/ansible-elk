@@ -1,0 +1,164 @@
+---
+### Instalar o Elasticsearch.
+### https://www.elastic.co/guide/en/elasticsearch/reference/8.12/rpm.html#rpm-repo
+
+- name: Instalando o Firewalld
+  ansible.builtin.dnf:
+    name: firewalld
+    state: present
+  tags: elastic
+
+- name: Habilitandoo Firewalld para iniciar junto com o sistema
+  ansible.builtin.systemd:
+    name: firewalld
+    enabled: yes
+  tags: elastic
+
+- name: Iniciando o Firewalld
+  ansible.builtin.systemd:
+    name: firewalld
+    state: started
+  tags: elastic
+
+- name: Verificando o estado do Firewalld
+  ansible.builtin.command:
+    cmd: firewall-cmd --state
+  register: firewalld_state
+  changed_when: false
+  tags: elastic
+
+- name: Imprimindo o estado do Firewalld
+  ansible.builtin.debug:
+    var: firewalld_state.stdout
+  tags: elastic
+
+- name: Permitindo o tráfego na "zona padrão" para serviço "http"
+  ansible.posix.firewalld:
+    service: http
+    permanent: true
+    state: enabled
+  tags: elastic
+
+- name: Recarregando o serviço Firewalld
+  ansible.builtin.service:
+    name: firewalld
+    state: reloaded
+  tags: elastic
+
+- name: Baixando o binário do Java
+  ansible.builtin.get_url:
+    url: https://download.oracle.com/java/21/latest/jdk-21_linux-x64_bin.rpm
+    dest: /tmp/jdk-21_linux-x64_bin.rpm
+    mode: '0755'
+  tags: elastic
+
+- name: Instalando o Java
+  ansible.builtin.shell:
+    cmd: sudo rpm -Uvh /tmp/jdk-21_linux-x64_bin.rpm
+  tags: elastic
+
+- name: Verificando a versão do Java
+  ansible.builtin.shell:
+    cmd: java -version 2>&1
+  register: java_version
+  changed_when: false
+  tags: elastic
+
+- name: Imprimindo a versão do Java
+  ansible.builtin.debug:
+    msg: "{{ java_version.stdout }}"
+  tags: elastic
+
+- name: Importando a "Chave GPG Pública do Elasticsearch"
+  ansible.builtin.shell:
+    cmd: sudo rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch
+  tags: elastic
+
+- name: Adicionando repositório do Elasticsearch
+  ansible.builtin.yum_repository:
+    name: elasticsearch
+    description: "Elastic repository for 8.x packages"
+    baseurl: "https://artifacts.elastic.co/packages/8.x/yum"
+    gpgcheck: yes
+    gpgkey: "https://artifacts.elastic.co/GPG-KEY-elasticsearch"
+    enabled: yes
+    #autorefresh: yes # -> não é suportado pelo módulo 'yum_repository' do Ansible.
+    #type: rpm-md # -> não é suportado pelo módulo 'yum_repository' do Ansible.
+  tags: elastic
+
+- name: Atualizando cache dos repositórios do sistema
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
+    update_cache: yes
+  tags: elastic
+
+- name: Instalando o pacote Elasticsearch. Aguarde ... 
+  ansible.builtin.dnf:
+    name: elasticsearch
+    state: present
+  tags: elastic
+
+- name: Habilitando e iniciando o serviço Elasticsearch
+  ansible.builtin.systemd:
+    name: elasticsearch
+    enabled: yes
+    state: started
+  tags: elastic
+
+- name: Resetando a senha do usuário "elastic" 
+  ansible.builtin.shell:
+    cmd: sudo /usr/share/elasticsearch/bin/elasticsearch-reset-password -u elastic -b
+  args:
+    creates: /home/elk/passwd_elastic.txt
+  register: reset_password_output
+  tags: elastic
+
+- name: Salvando a senha resetada do usuário "elastic" no arquivo "passwd_elastic.txt"
+  ansible.builtin.copy:
+    content: "{{ reset_password_output.stdout }}"
+    dest: /home/elk/passwd_elastic.txt
+  tags: elastic
+
+- name: Restringindo o acesso externo ao Elasticsearch
+  ansible.builtin.lineinfile:
+    path: /etc/elasticsearch/elasticsearch.yml
+    regexp: '^#?network.host:'
+    line: 'network.host: localhost'
+    state: present
+  tags: elastic
+
+- name: Desativando a segurança do Elasticsearch
+  ansible.builtin.lineinfile:
+    path: /etc/elasticsearch/elasticsearch.yml
+    regexp: '^#?xpack.security.enabled:'
+    line: 'xpack.security.enabled: false'
+    state: present
+  tags: elastic
+
+- name: Permitindo tráfego na porta "TCP 9200"
+  ansible.posix.firewalld:
+    port: 9200/tcp
+    permanent: true
+    state: enabled
+    immediate: true
+  tags: elastic
+
+- name: Recarregando o serviço elasticsearch
+  ansible.builtin.systemd:
+    name: elasticsearch
+    state: restarted
+    daemon_reload: yes
+  tags: elastic
+
+- name: Verificando se o Elasticsearch está "respondendo a solicitações HTTP simples"
+  ansible.builtin.shell:
+    cmd: curl -X GET http://localhost:9200
+  register: elasticsearch_response
+  tags: elastic
+
+- name: Salvando a saída da verificação anterior no arquivo "response_to_request_elasticsearch.txt"
+  ansible.builtin.copy:
+    content: "{{ elasticsearch_response.stdout }}"
+    dest: /home/elk/response_to_request_elasticsearch.txt
+  tags: elastic

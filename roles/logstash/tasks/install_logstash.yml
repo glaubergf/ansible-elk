@@ -1,0 +1,149 @@
+---
+### Instalar o Logstash
+### https://www.elastic.co/guide/en/logstash/current/installing-logstash.html
+
+- name: Instalando o pacote Logstash
+  ansible.builtin.dnf:
+    name: logstash
+    state: present
+  tags: logstash
+
+- name: Adicionando "certificado SSL" baseado no endereço "IP do servidor ELK" (Seção "[ v3_ca ]" no "openssl.cnf")
+  ansible.builtin.lineinfile:
+    path: /etc/pki/tls/openssl.cnf
+    line: 'subjectAltName = IP: 192.100.20.200'
+    insertafter: '^\[ v3_ca \]'
+    state: present
+  tags: logstash
+
+### --- Gerar certificado autoassinado válido por 365 dias.
+  # NOTA: Verificar issue com a biblioteca "python3-cryptograpgy" mesmo já estando instalada.
+    #TASK [logstash : Gerar certificado autoassinado válido por 365 dias] ***********
+    #fatal: [vg-kvm-elk]: FAILED! => changed=false 
+    #  msg: Cannot detect the required Python library cryptography (>= 1.6)
+#- name: Gerar certificado autoassinado válido por 365 dias
+#  community.crypto.x509_certificate:
+#    path: /etc/pki/tls/certs/logstash-forwarder.crt
+#    privatekey_path: /etc/pki/tls/private/logstash-forwarder.key
+#    csr_path: /etc/pki/tls/csr/logstash-forwarder.csr
+#    provider: selfsigned
+#    selfsigned_version: 3
+#    selfsigned_digest: sha256
+#    selfsigned_not_before: -60
+#    selfsigned_not_after: +365
+#    backup: yes
+#    select_crypto_backend: auto
+#  tags: logstash1
+
+- name: Gerando "certificado autoassinado" válido por "365 dias"
+  ansible.builtin.shell:
+    cmd: cd /etc/pki/tls && openssl req -config /etc/pki/tls/openssl.cnf -x509 -days 365 -batch -nodes -newkey rsa:2048 -keyout /etc/pki/tls/private/logstash-forwarder.key -out /etc/pki/tls/certs/logstash-forwarder.crt
+  register: openssl_output
+  tags: logstash
+
+- name: Criando e configurando o arquivo de "Input" do Logstash
+  ansible.builtin.copy:
+    content: |
+      input {
+        beats {
+          port => 5044
+          ssl_enabled => true
+          ssl_certificate => "/etc/pki/tls/certs/logstash-forwarder.crt"
+          ssl_key => "/etc/pki/tls/private/logstash-forwarder.key"
+        }
+      }
+    dest: /etc/logstash/conf.d/input.conf
+    owner: root
+    group: root
+    mode: '0644'
+  tags: logstash
+
+- name: Criando e configurando o arquivo de "Output" do Logstash
+  ansible.builtin.copy:
+    content: |
+      output {
+        elasticsearch {
+          hosts => ["http://localhost:9200"]
+          sniffing => true
+          manage_template => false
+          index => "%{[@metadata][beat]}-%{[@metadata][version]}-%{+YYYY.MM.dd}"
+        }
+      }
+    dest: /etc/logstash/conf.d/output.conf
+    owner: root
+    group: root
+    mode: '0644'
+  tags: logstash
+
+- name: Criando e configurando o arquivo de "Filter" do Logstash
+  ansible.builtin.copy:
+    content: |
+      filter {
+        if [type] == "syslog" {
+          grok {
+            match => { "message" => "%{SYSLOGLINE}" }
+          }
+          date {
+            match => [ "timestamp", "MMM d HH:mm:ss", "MMM dd HH:mm:ss" ]
+          }
+        }
+      }
+    dest: /etc/logstash/conf.d/filter.conf
+    owner: root
+    group: root
+    mode: '0644'
+  tags: logstash
+
+- name: Habilitando e iniciando o serviço Logstash
+  ansible.builtin.systemd:
+    name: logstash
+    enabled: yes
+    state: started
+  tags: logstash
+
+- name: Testando configuração do Logstash. A saída deverá conter "Configuration OK"
+  ansible.builtin.shell:
+    cmd: sudo -u logstash /usr/share/logstash/bin/logstash --path.settings /etc/logstash -t
+  register: logstash_config_test
+  tags: logstash
+
+- name: Salvando o teste anterior em em arquivo "logstash_config_test_output.txt"
+  copy:
+    content: "{{ logstash_config_test.stdout }}"
+    dest: "/home/elk/logstash_config_test_output.txt"
+  tags: logstash
+
+- name: Permitindo tráfego na porta "TCP 5044"
+  ansible.posix.firewalld:
+    port: 5044/tcp
+    permanent: true
+    state: enabled
+    immediate: true
+  tags: logstash
+
+- name: Recarregando o Firewalld
+  ansible.builtin.service:
+    name: firewalld
+    state: reloaded
+  tags: logstash
+
+- name: Copiando o "Certificado Autoassinado" do servidor ELK para o diretório "certs" no host local do projeto
+  ansible.builtin.fetch:
+    src: /etc/pki/tls/certs/logstash-forwarder.crt
+    dest: certs
+  tags: logstash
+
+- name: Procurando arquivos "*.txt" no diretório do "usuário no servidor ELK"
+  ansible.builtin.find:
+    paths: /home/elk/
+    patterns: "*.txt"
+  register: files_to_fetch
+  tags: logstash
+
+- name: Copiando arquivos "*.txt" do servidor ELK para o diretório "files" no host local do projeto
+  ansible.builtin.fetch:
+    src: "{{ item.path }}"
+    dest: files/
+    flat: yes
+  with_items: "{{ files_to_fetch.files }}"
+  tags: logstash
