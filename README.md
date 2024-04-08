@@ -228,7 +228,7 @@ Este arquivo de configuração é uma parte essencial da automação de infraest
 
 * _install_metricbeat.yml_
 
-O arquivo de configuração install_metricbeat.yml para a role metricbeat no Ansible é responsável por automatizar a instalação e configuração do Metricbeat em um cliente Debian. Aqui está um resumo das principais tarefas realizadas por este arquivo:
+O arquivo "install_metricbeat.yml" é responsável por automatizar a instalação e configuração do Metricbeat em um cliente Debian. Segue um resumo das principais tarefas realizadas por este arquivo:
 ```
 Copia do Certificado SSL:
 Copia um certificado SSL autoassinado do servidor Rocky Linux 9 para o cliente Debian. Isso é feito para garantir a comunicação segura entre o cliente e o servidor.
