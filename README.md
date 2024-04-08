@@ -8,7 +8,7 @@ Data: 2024-04-07
 
 # Automatizar com o Ansible a instalação e configuração do Elastic Stack no servidor Rocky Linux
 
-![Image](https://github.com/glaubergf/ansible-elks/blob/main/images/elastic_observability_host_sup.png)
+![Image](https://github.com/glaubergf/ansible-elk/blob/main/images/elastic_observability_host_sup.png)
 
 O **[Elastic Stack](https://www.elastic.co/pt/elastic-stack/)** (_também conhecido como ELK Stack_) é composto pelos seguintes produtos: _Elasticsearch_, _Kibana_, _Logstash_ e _Beats_. Com isso, podemos obter dados de maneira confiável e segura de qualquer fonte, em qualquer formato, depois, fazer buscas, análises e visualizações.
 
